@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <input type="file" id="image" />
+    <button disabled id="js">JS</button>
+    <button disabled id="wasm">WASM</button>
+    <div id="output"></div>
+
+    <canvas id="canvas"></canvas>
+
+    <script src="./grayscale.js"></script>
+    <script>
+        const imageInput = document.getElementById('image');
+        const canvas = document.getElementById('canvas');
+        const jsBtn = document.getElementById('js');
+        const wasmBtn = document.getElementById('wasm');
+        const output = document.getElementById('output');
+
+        const ctx = canvas.getContext('2d');
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                console.log('read : onload')
+                const image = new Image();
+                image.src = reader.result;
+                image.onload = () => {
+                    console.log('image : onload')
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+                    ctx.drawImage(image, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const input = imageData.data;
+
+                    jsBtn.disabled = false;
+                    wasmBtn.disabled = false;
+
+                    jsBtn.addEventListener('click', () => {
+                        const start = performance.now();
+                        for(let i=0; i<input.length; i+=4) {
+                            const r = input[i];
+                            const g = input[i+1];
+                            const b = input[i+2];
+
+                            const gray = (0.299 * r + 0.587 * g + 0.114 * b);
+                            input[i] = input[i+1] = input[i+2] = gray;
+                        }
+                        const end = performance.now();
+
+                        performanceOutput((end - start) / 1000);
+
+                        ctx.putImageData(imageData, 0, 0);
+                    });
+
+                    wasmBtn.addEventListener('click', () => {
+                        const inputPtr = Module._malloc(input.length * input.BYTES_PER_ELEMENT);
+
+                        Module.HEAP8.set(input, inputPtr / input.BYTES_PER_ELEMENT);
+
+                        const applyGrayscale = Module.cwrap("applyGrayscale", null, ["number", "number"]);
+
+                        const start = performance.now();
+                        applyGrayscale(inputPtr, input.length);
+                        const end = performance.now();
+                        performanceOutput((end - start) / 1000);
+
+                        const output = new Uint8Array(Module.HEAP8.buffer, inputPtr, input.length);
+                        input.set(output);
+
+                        Module._free(inputPtr);
+
+                        ctx.putImageData(imageData, 0, 0);
+                    });
+                };
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        function performanceOutput(seconds) {
+            output.innerText = seconds;
+        }
+    </script>
+</body>
+</html>

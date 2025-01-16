@@ -7,7 +7,7 @@
 </head>
 <body>
     <input type="file" id="image" />
-    <button disabled id="js">JS</button>
+    <button style="visibility: hidden;" disabled id="js">JS</button>
     <button disabled id="wasm">WASM</button>
     <div id="output"></div>
 
@@ -28,6 +28,8 @@
 
             const reader = new FileReader();
 
+            reader.readAsDataURL(file);
+
             reader.onload = () => {
                 console.log('read : onload')
                 const image = new Image();
@@ -39,20 +41,20 @@
                     ctx.drawImage(image, 0, 0);
 
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const input = imageData.data;
+                    const pixels = imageData.data;
 
                     jsBtn.disabled = false;
                     wasmBtn.disabled = false;
 
                     jsBtn.addEventListener('click', () => {
                         const start = performance.now();
-                        for(let i=0; i<input.length; i+=4) {
-                            const r = input[i];
-                            const g = input[i+1];
-                            const b = input[i+2];
+                        for(let i=0; i<pixels.length; i+=4) {
+                            const r = pixels[i];
+                            const g = pixels[i+1];
+                            const b = pixels[i+2];
 
                             const gray = (0.299 * r + 0.587 * g + 0.114 * b);
-                            input[i] = input[i+1] = input[i+2] = gray;
+                            pixels[i] = pixels[i+1] = pixels[i+2] = gray;
                         }
                         const end = performance.now();
 
@@ -62,28 +64,26 @@
                     });
 
                     wasmBtn.addEventListener('click', () => {
-                        const inputPtr = Module._malloc(input.length * input.BYTES_PER_ELEMENT);
+                        const imageDataPointer = Module._malloc(pixels.length * pixels.BYTES_PER_ELEMENT);
 
-                        Module.HEAP8.set(input, inputPtr / input.BYTES_PER_ELEMENT);
+                        Module.HEAP8.set(pixels, imageDataPointer / pixels.BYTES_PER_ELEMENT);
 
                         const applyGrayscale = Module.cwrap("applyGrayscale", null, ["number", "number"]);
 
                         const start = performance.now();
-                        applyGrayscale(inputPtr, input.length);
+                        applyGrayscale(imageDataPointer, pixels.length);
                         const end = performance.now();
                         performanceOutput((end - start) / 1000);
 
-                        const output = new Uint8Array(Module.HEAP8.buffer, inputPtr, input.length);
-                        input.set(output);
+                        const grayPixels = new Uint8Array(Module.HEAP8.buffer, imageDataPointer, pixels.length);
+                        pixels.set(grayPixels);
 
-                        Module._free(inputPtr);
+                        Module._free(imageDataPointer);
 
                         ctx.putImageData(imageData, 0, 0);
                     });
                 };
             };
-
-            reader.readAsDataURL(file);
         });
 
         function performanceOutput(seconds) {

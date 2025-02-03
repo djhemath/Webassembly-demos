@@ -16,14 +16,10 @@
     import * as ffmpegLib from './package/dist/esm/index.js';
 
     const ffmpeg = new ffmpegLib.FFmpeg();
-    console.log(ffmpeg)
     const videoInput = document.getElementById('videoInput');
     const convertButton = document.getElementById('convertButton');
     const gifOutput = document.getElementById('gifOutput');
-
-    async function loadFFmpeg() {
-      await ffmpeg.load();
-    }
+    ffmpeg.load();
 
     async function convertToGif(videoFile) {
         // debugger
@@ -78,8 +74,6 @@
       }
     });
 
-    // Load FFmpeg when the page is ready
-    loadFFmpeg();
   </script>
 </body>
 </html>
